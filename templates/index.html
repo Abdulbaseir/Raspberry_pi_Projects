@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RC Excavator Control</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        body { background: #111; color: #fff; font-family: 'Courier New', Courier, monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        .top-bar { background: #222; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #444; }
+        .top-bar h1 { font-size: 1.2rem; color: #ffaa00; }
+        .estop-btn { background: #ff3333; color: white; border: none; padding: 10px 20px; font-weight: bold; font-size: 1rem; border-radius: 5px; cursor: pointer; box-shadow: 0 0 10px red; }
+        .estop-btn:active { background: #990000; transform: scale(0.95); }
+
+        .main { display: flex; flex: 1; overflow: hidden; }
+        
+        .cam-container { flex: 1; background: #000; position: relative; border-right: 2px solid #333; }
+        .cam-container img { width: 100%; height: 100%; object-fit: contain; }
+        .cam-label { position: absolute; top: 10px; left: 10px; background: rgba(0,255,0,0.3); padding: 5px; font-size: 0.8rem; }
+
+        .controls { width: 420px; background: #1a1a1a; padding: 20px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+        .section-title { color: #00ccff; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; font-size: 0.9rem; }
+
+        .key-group { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .key-row { display: flex; gap: 5px; }
+        .key {
+            width: 45px; height: 45px; background: #333; border: 2px solid #555;
+            border-radius: 5px; display: flex; align-items: center; justify-content: center;
+            font-size: 0.9rem; font-weight: bold; transition: 0.1s;
+        }
+        .key.active { background: #00ccff; color: #000; border-color: #00ffff; box-shadow: 0 0 10px #00ccff; transform: scale(0.95); }
+        .key.auto-center { border-color: #ffaa00; color: #ffaa00; }
+
+        .control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        .servo-box { background: #222; padding: 10px; border-radius: 5px; }
+        .servo-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: #aaa; margin-bottom: 5px; }
+        input[type="range"] { width: 100%; }
+        .hint { font-size: 0.65rem; color: #666; text-align: center; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <h1>🚧 EXCAVATOR OS v1.0</h1>
+        <button class="estop-btn" onclick="emergencyStop()">⚡ E-STOP</button>
+    </div>
+
+    <div class="main">
+        <div class="cam-container">
+            <div class="cam-label">▶ LIVE CAM</div>
+            <img src="/video_feed" alt="Camera">
+        </div>
+
+        <div class="controls">
+            
+            <div>
+                <div class="section-title">FRONT ASSEMBLY (Hold to move)</div>
+                <div class="key-group">
+                    <div class="key-row"><div class="key" id="k-w">W</div></div>
+                    <div class="key-row">
+                        <div class="key" id="k-a">A</div>
+                        <div class="key" id="k-s">S</div>
+                        <div class="key" id="k-d">D</div>
+                    </div>
+                    <div class="key-row" style="margin-top: 5px;">
+                        <div class="key" id="k-q">Q</div>
+                        <div class="key" id="k-e">E</div>
+                    </div>
+                    <div class="hint">W/S: Boom | A/D: Arm | Q/E: Bucket</div>
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">CHASSIS & CAB (Auto-Center)</div>
+                <div class="key-group">
+                    <div class="key-row">
+                        <div class="key auto-center" id="k-up">↑</div>
+                    </div>
+                    <div class="key-row">
+                        <div class="key auto-center" id="k-left">←</div>
+                        <div class="key auto-center" id="k-down">↓</div>
+                        <div class="key auto-center" id="k-right">→</div>
+                    </div>
+                    <div class="hint">↑/↓: Left Track | ←/→: Cab Swing</div>
+                    
+                    <div class="key-row" style="margin-top: 15px;">
+                        <div class="key auto-center" id="k-i">I</div>
+                    </div>
+                    <div class="key-row">
+                        <div class="key auto-center" id="k-j">J</div>
+                        <div class="key auto-center" id="k-k">K</div>
+                        <div class="key auto-center" id="k-l">L</div>
+                    </div>
+                    <div class="hint">I/K: Right Track</div>
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">MANUAL SLIDERS (TOUCH)</div>
+                <div class="control-grid" id="sliders"></div>
+            </div>
+
+            <button style="background:#444; border:none; color:white; padding:10px; cursor:pointer;" onclick="centerAll()">Reset All to Center</button>
+        </div>
+    </div>
+      <div id="ext-link-bar" style="background:var(--ink); color:var(--yellow); padding:10px; text-align:center; font-size:0.7rem; letter-spacing:1px; position:fixed; bottom:0; width:100%; z-index:100;">
+    EXTERNAL LINK: <span id="ext-url-text">WAITING FOR TUNNEL...</span>
+    <a id="ext-url-link" href="#" target="_blank" style="color:var(--yellow); text-decoration:underline; margin-left:10px; display:none;">OPEN ON OTHER DEVICE</a>
+  </div>
+  <footer class="stencil" style="margin-bottom:40px;">SYSTEM ARMED // GPIO + PCA9685 // HANDLE WITH CARE</footer>
+
+    <script>
+        const SERVO_NAMES = ["Left Track", "Right Track", "Cab Rotation", "Boom Lift", "Arm Lift", "Bucket"];
+        const SPEED = 4; 
+        const SPRING_BACK_SERVOS = [0, 1, 2];
+        
+        let state = [90, 90, 90, 90, 90, 90];
+        let activeKeys = new Set();
+        let updateInterval = null;
+
+        const sliderDiv = document.getElementById('sliders');
+        SERVO_NAMES.forEach((name, i) => {
+            sliderDiv.innerHTML += `
+                <div class="servo-box">
+                    <div class="servo-label"><span>${name}</span><span id="sv${i}">90°</span></div>
+                    <input type="range" min="0" max="180" value="90" oninput="state[${i}]=parseInt(this.value); document.getElementById('sv${i}').innerText=this.value+'°'; sendUpdate();">
+                </div>`;
+        });
+
+        const keyMap = {
+            'w': [3, 1], 's': [3, -1],             
+            'a': [4, 1], 'd': [4, -1],             
+            'q': [5, 1], 'e': [5, -1],             
+            'arrowleft': [2, 1], 'arrowright': [2, -1], 
+            'arrowup': [0, 1], 'arrowdown': [0, -1],   
+            'i': [1, 1], 'k': [1, -1]              
+        };
+
+        function handleKeyDown(e) {
+            const key = e.key.toLowerCase();
+            if (keyMap[key] && !activeKeys.has(key)) {
+                e.preventDefault();
+                activeKeys.add(key);
+                const uiKey = key.replace('arrow', '');
+                const el = document.getElementById('k-' + uiKey);
+                if(el) el.classList.add('active');
+                if (!updateInterval) updateInterval = setInterval(processKeys, 50);
+            }
+        }
+
+        function handleKeyUp(e) {
+            const key = e.key.toLowerCase();
+            if (keyMap[key]) {
+                activeKeys.delete(key);
+                const uiKey = key.replace('arrow', '');
+                const el = document.getElementById('k-' + uiKey);
+                if(el) el.classList.remove('active');
+                const [id, dir] = keyMap[key];
+                if (SPRING_BACK_SERVOS.includes(id)) {
+                    state[id] = 90; 
+                    updateSliderUI(id);
+                    sendUpdate();
+                }
+                if (activeKeys.size === 0 && updateInterval) {
+                    clearInterval(updateInterval);
+                    updateInterval = null;
+                }
+            }
+        }
+
+        function updateSliderUI(id) {
+            const sliders = sliderDiv.querySelectorAll('input[type=range]');
+            if(sliders[id]) sliders[id].value = Math.round(state[id]);
+            document.getElementById('sv'+id).innerText = Math.round(state[id]) + '°';
+        }
+
+        function processKeys() {
+            let changed = false;
+            activeKeys.forEach(key => {
+                const [id, dir] = keyMap[key];
+                let newAngle = state[id] + (dir * SPEED);
+                if (newAngle >= 0 && newAngle <= 180) {
+                    state[id] = newAngle;
+                    changed = true;
+                    updateSliderUI(id);
+                }
+            });
+            if (changed) sendUpdate();
+        }
+
+        async function sendUpdate() {
+            try {
+                await fetch('/api/servo/all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ angles: state })
+                });
+            } catch (err) { console.error("Connection lost!"); }
+        }
+
+        async function centerAll() {
+            state = [90, 90, 90, 90, 90, 90];
+            SERVO_NAMES.forEach((_, i) => updateSliderUI(i));
+            await fetch('/api/servo/center', { method: 'POST' });
+        }
+
+        async function emergencyStop() {
+            if(confirm("EMERGENCY STOP: Cut power to all servos?")) {
+                await fetch('/api/servo/emergency_stop', { method: 'POST' });
+                alert("Motors Killed! Refresh page to restart.");
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+
+        window.addEventListener('blur', () => {
+            activeKeys.clear();
+            document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
+            SPRING_BACK_SERVOS.forEach(id => { state[id] = 90; updateSliderUI(id); });
+            sendUpdate();
+            if(updateInterval) clearInterval(updateInterval);
+            updateInterval = null;
+        });
+            // --- Auto-fetch External Tunnel Link ---
+    function fetchTunnelUrl() {
+      fetch('/api/tunnel-url')
+        .then(r => r.json())
+        .then(data => {
+          if (data.url) {
+            document.getElementById('ext-url-text').innerText = data.url;
+            document.getElementById('ext-url-link').href = data.url;
+            document.getElementById('ext-url-link').style.display = "inline";
+          } else {
+            setTimeout(fetchTunnelUrl, 3000); // Try again in 3 seconds
+          }
+        })
+        .catch(() => setTimeout(fetchTunnelUrl, 3000));
+    }
+    fetchTunnelUrl();
+    </script>
+</body>
+</html>

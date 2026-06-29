@@ -1,0 +1,1 @@
+if you want to use this UI just replace the index.html with the index file in template folder in remote_excavator_project folder

@@ -1,0 +1,16 @@
+paste or type in terminal:
+
+cd ~/remote_excavator_project
+source venv/bin/activate
+
+and then to start the app:
+Type:
+
+sudo python app.py
+
+
+open a new terminal and past this:
+it gives you a link, copy and paste that link and paste in any browser and you get the live streaming:
+⬇️
+
+cloudflared tunnel --url http://localhost:5000
